@@ -1,0 +1,74 @@
+---
+# tasks file for ansible-role-rbenv
+
+- name: Install rbenv build dependencies.
+  yum:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - openssl-devel
+    - readline-devel
+    - zlib-devel
+  become: true
+
+- name: Set rbenv_user, if not already set.
+  set_fact:
+    rbenv_user: "{{ ansible_user }}"
+  when: rbenv_user is undefined
+
+- name: Clone rbenv/rbenv.
+  git:
+    repo: "{{ rbenv_repo }}"
+    dest: "{{ rbenv_root }}"
+    version: "{{ rbenv_version }}"
+    accept_hostkey: yes
+    force: yes
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Compile dynamic bash extention.
+  shell: $SHELL -lc "cd ~/.rbenv && src/configure && make -C src"
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Create plugins directory.
+  file:
+    state: directory
+    path: "{{ rbenv_root }}/plugins"
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Install plugins.
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ rbenv_root }}/plugins/{{ item.name }}"
+    version: "{{ item.version }}"
+    accept_hostkey: yes
+    force: yes
+  with_items: "{{ rbenv_plugins }}"
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Add ~/.rbenv/bin to PATH.
+  lineinfile:
+    path: ~/.bash_profile
+    line: 'export PATH="$HOME/.rbenv/bin:$PATH"'
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Add rbenv init.
+  lineinfile:
+    path: ~/.bash_profile
+    line: 'eval "$(rbenv init -)"'
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Install ruby.
+  shell: $SHELL -lc "{{ rbenv_root }}/bin/rbenv install --skip-existing {{ ruby_version }}"
+  become: yes
+  become_user: "{{ rbenv_user }}"
+
+- name: Set ruby.
+  shell: $SHELL -lc "{{ rbenv_root }}/bin/rbenv global {{ ruby_version }} && rbenv rehash"
+  become: yes
+  become_user: "{{ rbenv_user }}"
